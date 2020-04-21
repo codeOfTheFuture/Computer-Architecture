@@ -50,6 +50,13 @@ class CPU:
         self.fl = 0
         self.ie = 0
 
+    
+    def ram_read(self, mar):
+        return self.ram[mar]
+
+    def ram_write(self, mar, mdr):
+        self.ram[mar] = mdr
+
     def load(self):
         """Load a program into memory."""
 
@@ -103,4 +110,25 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        a = self.ram_read(self.pc + 1) # operand_a
+        b = self.ram_read(self.pc + 2) # operand_b
+
+        while True:
+            i = self.ram[self.pc] # Instruction
+
+            if i == HLT:
+                sys.exit(0)
+            elif i == JMP:
+                self.pc = a
+                self.pc += 2
+            elif i == LDI:
+                self.reg[a] = b
+                self.pc += 3
+            elif i == NOP:
+                self.pc += 1
+            elif i == PRN:
+                print(self.reg[a])
+                self.pc += 1
+            else:
+                print(f'Instruction at {self.pc} index is unknown')
+                sys.exit(1)
