@@ -37,6 +37,7 @@ SHR = 0b10101101 # Shift val in registerA right by the number of bits in registe
 ST = 0b10000100 # Store value in registerB in address stored in registerA
 SUB = 0b10100001 # Subtract the val in the second register from first, storing result in registerA
 XOR = 0b10101011 # bitwise-XOR between vals in registerA and registerB, storeing result in registerA
+SP = 7
 
 
 class CPU:
@@ -47,8 +48,14 @@ class CPU:
         self.reg = [0] * 8
         self.ram = [0] * 256
         self.pc = 0
-        self.fl = 0
-        self.ie = 0
+        self.reg[SP] = 0xF4
+        self.branchtable = {}
+        self.branchtable[HLT] = self.handle_hlt
+        self.branchtable[JMP] = self.handle_jmp
+        self.branchtable[LDI] = self.handle_ldi
+        self.branchtable[MUL] = self.handle_mul
+        self.branchtable[POP] = self.handle_pop
+        self.branchtable[PUSH] = self.handle_push
 
     
     def ram_read(self, mar):
@@ -57,34 +64,34 @@ class CPU:
     def ram_write(self, mar, mdr):
         self.ram[mar] = mdr
 
-    def load(self):
+    def load(self, file_path):
         """Load a program into memory."""
-
         address = 0
+        try:    
+            with open(file_path) as file:
+                for line in file:
+                    line = line.split('#')[0]
+                    line = line.strip()
+                    
+                    if line == '':
+                        continue
+                    i = int(line, 2)
+                    self.ram[address] = i
+                    address += 1
+        except FileExistsError:
+            print('File not found')
+            sys.exit()
 
-        # For now, we've just hardcoded a program:
-
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
-
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        
 
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
-
+        print(op, reg_a, reg_b)
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+        elif op == "MUL": 
+            self.reg[reg_a] *= self.reg[reg_b]
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -110,25 +117,49 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        a = self.ram_read(self.pc + 1) # operand_a
-        b = self.ram_read(self.pc + 2) # operand_b
 
         while True:
-            i = self.ram[self.pc] # Instruction
+            try:
+                ir = self.ram[self.pc] # Instruction
+                a = self.ram_read(self.pc + 1) # operand_a
+                b = self.ram_read(self.pc + 2) # operand_b
 
-            if i == HLT:
-                sys.exit(0)
-            elif i == JMP:
-                self.pc = a
-                self.pc += 2
-            elif i == LDI:
-                self.reg[a] = b
-                self.pc += 3
-            elif i == NOP:
-                self.pc += 1
-            elif i == PRN:
-                print(self.reg[a])
-                self.pc += 1
-            else:
+                self.branchtable[ir](a, b)
+
+            except:
                 print(f'Instruction at {self.pc} index is unknown')
-                sys.exit(1)
+                sys.exit()
+
+
+    def handle_hlt(self):
+        sys.exit()
+
+    def handle_jmp(self, a, b=None):
+        self.pc = a
+
+    def handle_ldi(self, a, b):
+        self.reg[a] = b
+        self.pc += 3
+
+    def handle_prn(self, a):
+        print(self.reg[a])
+        self.pc += 2
+
+    def handle_mul(self, a, b):
+        op = "MUL"
+        print(op, a, b)
+        self.alu(op, a, b)
+        self.pc += 3
+
+    def handle_pop(self, a, b=None):
+        value = self.ram[self.reg[SP]]
+        self.reg[a] = value
+        self.reg[SP] += 1
+        self.pc += 2
+
+    def handle_push(self, a, b=None):
+        self.reg[SP] -= 1
+        value = self.reg[a]
+        self.ram[self.reg[SP]] = value
+        self.pc += 2
+
